@@ -1,0 +1,60 @@
+name: Otomatis RSS ke Facebook
+
+on:
+  workflow_dispatch: # Bisa manual
+  schedule:
+    - cron: '0 * * * *'   # Scraping tiap 1 jam
+    - cron: '0 */2 * * *' # Posting FB tiap 2 jam
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================
+  # JOB 1: SCRAPING RSS SETIAP JAM
+  # ==========================================
+  scraping:
+    runs-on: ubuntu-22.04
+    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install feedparser requests
+      - name: Jalankan Import RSS
+        run: python import_rss.py
+      - name: Commit & Push Database
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add database.sqlite
+          git diff --staged --quiet && exit 0
+          git commit -m "Update DB via Scraper [skip ci]"
+          git push
+
+  # ==========================================
+  # JOB 2: POSTING KE FACEBOOK SETIAP 2 JAM
+  # ==========================================
+  posting:
+    runs-on: ubuntu-22.04
+    if: github.event.schedule == '0 */2 * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install requests
+      - name: Jalankan Posting Facebook
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+        run: python post_fb.py
+      - name: Commit & Push Database
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add database.sqlite
+          git diff --staged --quiet && exit 0
+          git commit -m "Update status FB [skip ci]"
+          git push
